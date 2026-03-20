@@ -1,0 +1,36 @@
+@import "tailwindcss";
+
+/* ── Custom theme (replaces tailwind.config.js) ── */
+@theme {
+  --color-bg:        #0f1117;
+  --color-surface:   #161b27;
+  --color-surface2:  #1e2535;
+  --color-border:    #2a3347;
+  --color-primary:   #4f8ef7;
+  --color-accent:    #63e6be;
+  --color-muted:     #7a8499;
+  --color-danger:    #f76f6f;
+
+  --width-sidebar:    260px;
+  --width-sidebar-sm: 64px;
+
+  --font-family-sans: 'IBM Plex Sans Thai', 'Sarabun', sans-serif;
+}
+
+@layer base {
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background-color: var(--color-bg);
+    color: white;
+    font-family: var(--font-family-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  a { text-decoration: none; color: inherit; }
+  button { font-family: inherit; cursor: pointer; border: none; background: none; }
+  input  { font-family: inherit; }
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: #161b27; }
+  ::-webkit-scrollbar-thumb { background: #2a3347; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #7a8499; }
+}
