@@ -1,14 +1,6 @@
-<script lang="ts" generics="TData extends Record<string, unknown>">
+<script lang="ts" generics="TData">
   import type { ExcelRow } from '$lib/types';
-
-  // ── Column definition ────────────────────────────────────────────────────
-  export interface ColDef<T> {
-    key: keyof T | string;
-    header: string;
-    cell?: (row: T) => string;
-    sortValue?: (row: T) => string | number;
-    enableSort?: boolean;
-  }
+  import type { ColDef } from '$lib/types/table';
 
   interface Props {
     data: TData[];
@@ -17,8 +9,8 @@
     exportFilename?: string;
     exportSheetName?: string;
     toExcelRows?: (rows: TData[]) => ExcelRow[];
-    /** key ในข้อมูลที่ใช้ match กับ 2dcode จาก import CSV/TXT */
-    importFilterKey?: keyof TData;
+    /** label badge ที่แสดงเมื่อ parent import ไฟล์แล้ว (null = ไม่แสดง) */
+    externalImportLabel?: string | null;
   }
 
   let {
@@ -28,7 +20,7 @@
     exportFilename = 'export',
     exportSheetName = 'Sheet1',
     toExcelRows = (rows) => rows as ExcelRow[],
-    importFilterKey,
+    externalImportLabel = null,
   }: Props = $props();
 
   // ── State ────────────────────────────────────────────────────────────────
@@ -39,11 +31,6 @@
   let pageSize       = $state(10);
   let exporting      = $state(false);
 
-  // Import state
-  let importCodes    = $state<Set<string> | null>(null); // null = ไม่มี filter
-  let importFilename = $state('');
-  let importError    = $state('');
-  let fileInputEl: HTMLInputElement;
 
   const pageSizes = [10, 25, 50, 100];
 
@@ -63,17 +50,12 @@
   const filteredRows = $derived.by(() => {
     let rows = data;
 
-    // 1. filter by imported 2dcode list
-    if (importCodes !== null && importFilterKey) {
-      rows = rows.filter((r) => importCodes!.has(String(r[importFilterKey] ?? '')));
-    }
-
-    // 2. global search
+    // global search
     const q = globalFilter.trim().toLowerCase();
     if (q) {
       rows = rows.filter((row) =>
         columns.some((col) => {
-          const val = col.cell ? col.cell(row) : String(row[col.key as keyof TData] ?? '');
+          const val = col.cell ? col.cell(row) : String((row as Record<string, unknown>)[String(col.key)] ?? '');
           return val.replace(/<[^>]+>/g, '').toLowerCase().includes(q);
         })
       );
@@ -87,8 +69,8 @@
     if (!sortKey || !sortDir) return filteredRows;
     const col = columns.find((c) => c.key === sortKey);
     return [...filteredRows].sort((a, b) => {
-      const av = col?.sortValue ? col.sortValue(a) : String(a[sortKey as keyof TData] ?? '');
-      const bv = col?.sortValue ? col.sortValue(b) : String(b[sortKey as keyof TData] ?? '');
+      const av = col?.sortValue ? col.sortValue(a) : String((a as Record<string, unknown>)[sortKey] ?? '');
+      const bv = col?.sortValue ? col.sortValue(b) : String((b as Record<string, unknown>)[sortKey] ?? '');
       if (av < bv) return sortDir === 'asc' ? -1 : 1;
       if (av > bv) return sortDir === 'asc' ? 1 : -1;
       return 0;
@@ -115,64 +97,18 @@
     return pages;
   }
 
-  // ── Import CSV / TXT ──────────────────────────────────────────────────────
-  function triggerImport(): void {
-    importError = '';
-    fileInputEl.value = '';
-    fileInputEl.click();
-  }
 
-  async function handleFileChange(e: Event): Promise<void> {
-    const file = (e.target as HTMLInputElement).files?.[0];
-    if (!file) return;
-
-    const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
-    if (ext !== 'csv' && ext !== 'txt') {
-      importError = `ไฟล์ "${file.name}" ไม่รองรับ — รองรับเฉพาะ .csv และ .txt เท่านั้น`;
-      importCodes = null;
-      importFilename = '';
-      fileInputEl.value = '';
-      return;
-    }
-
-    const text = await file.text();
-
-    // Parse: split by newline/comma/tab, trim whitespace, filter blanks
-    const codes = new Set(
-      text
-        .split(/[\r\n,\t]+/)
-        .map((s) => s.trim())
-        .filter(Boolean)
-    );
-
-    if (codes.size === 0) {
-      importError = `ไม่พบข้อมูลใน "${file.name}"`;
-      importCodes = null;
-      importFilename = '';
-      return;
-    }
-
-    importError    = '';
-    importCodes    = codes;
-    importFilename = file.name;
-    pageIndex      = 0;
-  }
-
-  // ── Refresh — ล้าง filter ทั้งหมด ────────────────────────────────────────
+  // ── Refresh — reset เฉพาะ search / sort / pagination (ไม่ล้างข้อมูล CSV) ──
   function handleRefresh(): void {
-    globalFilter   = '';
-    sortKey        = '';
-    sortDir        = '';
-    pageIndex      = 0;
-    importCodes    = null;
-    importFilename = '';
-    importError    = '';
-    if (fileInputEl) fileInputEl.value = '';
+    globalFilter = '';
+    sortKey      = '';
+    sortDir      = '';
+    pageIndex    = 0;
   }
 
   // ── Cell render ───────────────────────────────────────────────────────────
   function getCellContent(col: ColDef<TData>, row: TData): { html: boolean; value: string } {
-    const val = col.cell ? col.cell(row) : String(row[col.key as keyof TData] ?? '');
+    const val = col.cell ? col.cell(row) : String((row as Record<string, unknown>)[String(col.key)] ?? '');
     return { html: /<[a-z][\s\S]*>/i.test(val), value: val };
   }
 
@@ -188,14 +124,6 @@
   }
 </script>
 
-<!-- Hidden file input -->
-<input
-  bind:this={fileInputEl}
-  type="file"
-  accept=".csv,.txt"
-  class="hidden"
-  onchange={handleFileChange}
-/>
 
 <div class="bg-(--color-surface) border border-(--color-border) rounded-[10px] overflow-hidden flex flex-col">
 
@@ -208,11 +136,11 @@
       <span class="text-xs text-(--color-muted) bg-(--color-surface2) px-2 py-0.5 rounded-full border border-(--color-border)">
         {totalFiltered} รายการ
       </span>
-      <!-- Active import badge -->
-      {#if importCodes !== null}
-        <span class="flex items-center gap-1.5 text-xs bg-(--color-primary)/15 text-(--color-primary) border border-(--color-primary)/30 px-2.5 py-0.5 rounded-full font-medium">
+      <!-- External import badge (จาก parent) -->
+      {#if externalImportLabel}
+        <span class="flex items-center gap-1.5 text-xs bg-(--color-accent)/15 text-(--color-accent) border border-(--color-accent)/30 px-2.5 py-0.5 rounded-full font-medium">
           <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-          กรองจาก: {importFilename} ({importCodes.size} รหัส)
+          {externalImportLabel}
         </span>
       {/if}
     </div>
@@ -246,26 +174,6 @@
           <option value={s}>{s} / หน้า</option>
         {/each}
       </select>
-
-      <!-- Import CSV/TXT icon button -->
-      {#if importFilterKey}
-        <div class="relative group">
-          <button onclick={triggerImport}
-            aria-label="Import CSV/TXT"
-            class="w-8 h-8 flex items-center justify-center rounded-lg border transition cursor-pointer
-                   bg-(--color-surface2) border-(--color-border) hover:bg-(--color-primary)/15 hover:border-(--color-primary)/50 text-(--color-muted) hover:text-(--color-primary)">
-            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24"
-              fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-              <polyline points="17 8 12 3 7 8"/>
-              <line x1="12" y1="3" x2="12" y2="15"/>
-            </svg>
-          </button>
-          <span class="absolute -bottom-8 left-1/2 -translate-x-1/2 bg-(--color-surface2) border border-(--color-border) text-white text-[0.7rem] px-2 py-1 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition pointer-events-none z-10">
-            Import CSV / TXT
-          </span>
-        </div>
-      {/if}
 
       <!-- Refresh icon button -->
       <div class="relative group">
@@ -310,30 +218,8 @@
     </div>
   </div>
 
-  <!-- ── Import error alert ── -->
-  {#if importError}
-    <div class="flex items-start gap-3 mx-5 mt-3 px-4 py-3 bg-(--color-danger)/10 border border-(--color-danger)/30 rounded-lg text-sm text-(--color-danger)">
-      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
-        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-        class="flex-shrink-0 mt-0.5">
-        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-      </svg>
-      <div class="flex-1">
-        <p class="font-semibold mb-0.5">ไม่สามารถ Import ได้</p>
-        <p class="text-xs opacity-80">{importError}</p>
-      </div>
-      <button onclick={() => importError = ''} aria-label="ปิด"
-        class="text-(--color-danger)/60 hover:text-(--color-danger) transition cursor-pointer flex-shrink-0">
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
-          fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-        </svg>
-      </button>
-    </div>
-  {/if}
-
   <!-- ── Table ── -->
-  <div class="overflow-x-auto flex-1 {importError ? 'mt-3' : ''}">
+  <div class="overflow-x-auto flex-1">
     <table class="w-full text-[0.85rem]">
       <thead>
         <tr class="bg-(--color-surface2) border-b border-(--color-border)">
@@ -366,7 +252,7 @@
                 class="mx-auto mb-2 opacity-30">
                 <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
               </svg>
-              {importCodes !== null ? 'ไม่มีข้อมูลที่ตรงกับรหัสที่ Import' : 'ไม่พบข้อมูล'}
+              ไม่พบข้อมูล
             </td>
           </tr>
         {:else}

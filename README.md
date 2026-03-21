@@ -41,7 +41,7 @@ A modern admin dashboard template built with **SvelteKit 2**, **Svelte 5**, and 
 
 ```bash
 # Clone the repository
-git clone https://github.com/ichiron-dev/ichiron-template-dashboard.git
+git clone https://github.com/ichiron-dev/production-traceback.git
 cd ichiron-template-dashboard
 
 # Install dependencies (using bun)

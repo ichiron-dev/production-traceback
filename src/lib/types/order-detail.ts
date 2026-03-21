@@ -11,7 +11,7 @@ export interface ProcessEvent {
 }
 
 export interface ProcessStep {
-  key: 'case-setting' | 'damper-less' | 'laser-marking' | 'ec-sorting';
+  key: 'case-setting' | 'aeoi' | 'damper-less' | 'laser-marking' | 'pin-position';
   label: string;
   icon: string;              // SVG string
   status: ProcessStatus;

@@ -8,10 +8,12 @@ interface ExcelRow {
 declare global {
   interface Window {
     XLSX: {
+      read: (data: ArrayBuffer, opts: { type: 'array' }) => SheetJSWorkbook;
       utils: {
         json_to_sheet: (data: ExcelRow[]) => SheetJSWorksheet;
         book_new: () => SheetJSWorkbook;
         book_append_sheet: (wb: SheetJSWorkbook, ws: SheetJSWorksheet, name: string) => void;
+        sheet_to_json: <T = unknown[]>(ws: SheetJSWorksheet, opts?: { header?: number; defval?: string }) => T[];
       };
       writeFile: (wb: SheetJSWorkbook, filename: string) => void;
     };
@@ -64,6 +66,38 @@ export async function exportToExcel(
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, sheetName);
   XLSX.writeFile(wb, `${filename}.xlsx`);
+}
+
+/**
+ * Parse .xlsx หรือ .csv ที่ SheetJS เข้าใจ
+ * คืน code2d values จาก column ที่ชื่อ 'code2d' (case-insensitive, อยู่ column ไหนก็ได้)
+ * ถ้าไม่มี column code2d คืน null
+ */
+export async function parseFileForCode2d(file: File): Promise<string[] | null> {
+  const XLSX = await loadSheetJS();
+
+  const arrayBuffer = await file.arrayBuffer();
+  const workbook    = XLSX.read(arrayBuffer, { type: 'array' });
+
+  const sheetName = workbook.SheetNames[0];
+  if (!sheetName) return null;
+
+  const ws   = workbook.Sheets[sheetName];
+  const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '' });
+
+  if (!rows || rows.length < 2) return null;
+
+  // หา index ของ column 'code2d' (case-insensitive)
+  const headers   = (rows[0] as unknown[]).map((h) => String(h ?? '').trim().toLowerCase());
+  const code2dIdx = headers.indexOf('code2d');
+  if (code2dIdx === -1) return null;
+
+  // Extract ค่าจาก column นั้น (ข้าม header row)
+  const codes = (rows.slice(1) as unknown[][])
+    .map((row) => String(row[code2dIdx] ?? '').trim())
+    .filter(Boolean);
+
+  return codes.length > 0 ? codes : null;
 }
 
 /** Convert Order[] → flat rows for Excel */
