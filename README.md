@@ -1,24 +1,26 @@
-# Ichiron Template Dashboard
+# Production Traceback Dashboard
 
-A modern admin dashboard template built with **SvelteKit 2**, **Svelte 5**, and **Tailwind CSS v4**. Designed as a starting point for building full-featured back-office or management systems.
+ระบบ Dashboard สำหรับติดตามและตรวจสอบข้อมูลการผลิต DENSO
+สร้างด้วย **SvelteKit 5**, **Svelte 5 (Runes)** และ **Tailwind CSS v4**
+เชื่อมต่อกับ **Rust gRPC backend** ผ่าน PostgreSQL
+
+---
 
 ## Features
 
-- **Authentication** — Login page with session guard (localStorage-based)
-- **Responsive Sidebar** — Collapsible navigation with grouped menu items and badge support
-- **Topbar** — User profile, notifications, and quick actions
-- **Dashboard Pages** — Pre-built pages for common use cases:
-  - Dashboard overview
-  - Analytics
-  - Reports
-  - Users management
-  - Products management
-  - Orders (with detail page)
-  - Notifications
-  - Settings
-- **DataTable Component** — Reusable table with sorting and pagination
-- **Excel Export** — Utility for exporting table data to `.xlsx`
-- **TypeScript** — Fully typed throughout
+- **Dashboard Overview** — สรุปสถิติรายวัน กรองตามวันที่ แยกตาม production line
+- **5 กระบวนการผลิต**
+  - Laser Marking — ตรวจสอบรหัส code2d
+  - Case Setting — ข้อมูลการประกอบ case
+  - AEOI — ผลการตรวจสอบ (G/NG + อัตรา Pass%)
+  - Damper Less — ข้อมูล damper
+  - Pin Position — ผลการตรวจสอบ (G/NG + อัตรา Pass%)
+- **Order Detail** — ติดตาม traceback ของแต่ละ code2d ทุก step
+- **DataTable Component** — ตาราง sort / pagination / export Excel
+- **gRPC Integration** — ดึงข้อมูลจาก Rust backend ผ่าน gRPC
+- **TypeScript** — มี type ครบทุกไฟล์
+
+---
 
 ## Tech Stack
 
@@ -30,112 +32,184 @@ A modern admin dashboard template built with **SvelteKit 2**, **Svelte 5**, and 
 | TypeScript | ^5.9 |
 | Vite | ^8.0 |
 | Bun | (recommended) |
+| gRPC (`@grpc/grpc-js`) | ^1.x |
 
-## Getting Started
+---
 
-### Prerequisites
+## Prerequisites
 
-- [Node.js](https://nodejs.org/) 18+ or [Bun](https://bun.sh/)
+- [Bun](https://bun.sh/) หรือ Node.js 18+
+- **Rust gRPC backend** ต้องรันอยู่ก่อน (ดู `../gRPC/denso/`)
+- PostgreSQL database ที่มีข้อมูลการผลิต
 
-### Installation
+---
+
+## Getting Started (Development)
+
+### 1. Clone และติดตั้ง dependencies
 
 ```bash
-# Clone the repository
 git clone https://github.com/ichiron-dev/production-traceback.git
-cd ichiron-template-dashboard
+cd production-traceback/production-traceback
 
-# Install dependencies (using bun)
 bun install
-
-# or using npm
-npm install
 ```
 
-### Development
+### 2. ตั้งค่า Environment Variables
 
 ```bash
+cp .env.example .env
+```
+
+แก้ไข `.env` ให้ตรงกับ environment ของคุณ:
+
+```env
+# ที่อยู่ของ gRPC server (Rust backend)
+GRPC_HOST=localhost:50051
+
+# Path ไปยัง proto directory
+GRPC_PROTO_DIR=../gRPC/denso/proto
+
+# Base URL สำหรับรูปภาพพนักงาน
+PUBLIC_EMP_IMAGE_BASE=http://<IMAGE_SERVER_IP>:<PORT>/emp_image_new
+```
+
+### 3. รัน gRPC Backend
+
+```bash
+cd ../gRPC/denso
+cargo run
+```
+
+### 4. รัน Frontend
+
+```bash
+cd production-traceback
 bun dev
-# or
-npm run dev
 ```
 
-Open [http://localhost:5173](http://localhost:5173) in your browser.
+เปิด [http://localhost:5173](http://localhost:5173)
 
-### Build
+---
+
+## Deploy to Production (Server)
+
+> **รันที่ server:** `it@server:~/program/service$`
+> **Target path:** `/home/it/program/service/production-traceback/`
+
+### ขั้นตอนที่ 1 — Build & Pack (บน dev machine)
 
 ```bash
-bun run build
-# or
-npm run build
+cd production-traceback   # root ของ project
+
+make          # clean → bun install → bun run build → pack → สร้าง deploy/
 ```
 
-### Preview production build
+`make` จะสร้าง `deploy/` folder ที่พร้อม deploy:
+
+```
+deploy/
+├── build/              # SvelteKit compiled output
+├── node_modules/       # runtime gRPC packages เท่านั้น
+├── package.json
+├── .env                # (ถ้ามี)
+└── setup_production_traceback.sh
+```
+
+> ดู target อื่น ๆ ด้วย `make help`
+
+### ขั้นตอนที่ 2 — Upload ขึ้น Server
 
 ```bash
-bun run preview
-# or
-npm run preview
+rsync -av --delete deploy/ it@<server-ip>:~/program/service/production-traceback/
 ```
 
-## Demo Login
+### ขั้นตอนที่ 3 — Setup Systemd Service (บน server)
 
-| Field | Value |
-|-------|-------|
-| Username | `admin` |
-| Password | any value |
+```bash
+# SSH เข้า server
+ssh it@<server-ip>
 
-> Any non-empty username/password will work. Use `admin` as username to get the Administrator role.
+# รัน setup script
+cd ~/program/service/production-traceback
+sudo bash setup_production_traceback.sh
+```
+
+Script จะ:
+1. ตรวจสอบ bun และไฟล์ที่จำเป็น
+2. หยุด/ลบ service เดิม (ถ้ามี)
+3. สร้าง systemd service ใหม่
+4. `enable` + `start` service
+5. แสดงผล live logs
+
+### คำสั่ง Management บน Server
+
+```bash
+systemctl status production-traceback      # ดูสถานะ
+systemctl restart production-traceback     # restart
+systemctl stop production-traceback        # หยุด
+journalctl -f -u production-traceback      # ดู logs แบบ live
+```
+
+---
 
 ## Project Structure
 
 ```
 src/
 ├── lib/
-│   ├── components/        # Shared UI components
-│   │   ├── DataTable.svelte
+│   ├── components/
+│   │   ├── DataTable.svelte       # ตาราง sort/pagination/export
 │   │   ├── SessionGuard.svelte
 │   │   ├── Sidebar.svelte
 │   │   └── Topbar.svelte
 │   ├── config/
-│   │   └── nav.ts         # Navigation menu configuration
-│   ├── data/
-│   │   └── order-mock.ts  # Mock data
-│   ├── stores/
-│   │   ├── auth.ts        # Authentication store & login/logout
-│   │   ├── session.ts     # Session management
-│   │   └── sidebar.ts     # Sidebar open/close state
-│   ├── table/
-│   │   └── index.svelte.ts  # Table state logic
+│   │   └── nav.ts                 # เมนู navigation
+│   ├── server/
+│   │   └── grpc.ts                # gRPC client (server-only)
 │   ├── types/
-│   │   └── index.ts       # Shared TypeScript types
+│   │   ├── grpc.ts                # types สำหรับ gRPC response
+│   │   ├── pages.ts               # types สำหรับแต่ละ page (PageData)
+│   │   └── table.ts               # types สำหรับ DataTable
 │   └── utils/
-│       └── excel.ts       # Excel export utility
+│       └── excel.ts               # Excel export utility
 └── routes/
-    ├── +layout.svelte     # Root layout
-    ├── +page.svelte       # Root redirect
-    ├── login/             # Login page
-    └── dashboard/         # Protected dashboard routes
-        ├── analytics/
-        ├── notifications/
-        ├── orders/
-        │   └── [id]/      # Order detail page
-        ├── products/
-        ├── reports/
-        ├── settings/
-        └── users/
+    ├── +layout.svelte
+    ├── login/
+    └── dashboard/
+        ├── +page.svelte           # Dashboard overview (date filter + stats)
+        ├── +page.server.ts        # โหลดข้อมูลจาก gRPC DashboardService
+        ├── data/
+        │   ├── aeoi/              # ตาราง AEOI รายการ
+        │   ├── case-setting/      # ตาราง Case Setting รายการ
+        │   ├── damper-less/       # ตาราง Damper Less รายการ
+        │   ├── laser-marking/     # ตาราง Laser Marking รายการ
+        │   └── pin-position/      # ตาราง Pin Position รายการ
+        └── orders/
+            └── [id]/              # Order detail — traceback ทุก step
 ```
 
-## Customization
+---
 
-### Adding a new page
+## Environment Variables
 
-1. Create a new folder under `src/routes/dashboard/`
-2. Add a `+page.svelte` file
-3. Register the route in `src/lib/config/nav.ts`
+| Variable | ค่า default | หน้าที่ |
+|----------|------------|---------|
+| `GRPC_HOST` | `localhost:50051` | ที่อยู่ gRPC server |
+| `GRPC_PROTO_DIR` | `../gRPC/denso/proto` | path ของ proto files |
+| `PUBLIC_EMP_IMAGE_BASE` | — | Base URL รูปพนักงาน |
 
-### Modifying the navigation menu
+> `PUBLIC_` prefix → browser อ่านได้
+> ไม่มี `PUBLIC_` → server-side เท่านั้น
 
-Edit `src/lib/config/nav.ts` to add, remove, or reorder navigation groups and items.
+---
+
+## Related
+
+- **gRPC Backend** → `../gRPC/denso/` (Rust + Tonic + sqlx)
+- **Proto definitions** → `../gRPC/denso/proto/denso/`
+
+---
 
 ## License
 

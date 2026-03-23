@@ -2,6 +2,7 @@ import type { PageServerLoad } from './$types';
 import { listLaserMarking, getLaserMarkingLines } from '$lib/server/grpc';
 import type { LaserMarkingRecord } from '$lib/types/grpc';
 import type { Code2dPageData } from '$lib/types/pages';
+import { bangkokDayToUtcRange } from '$lib/utils/date';
 
 async function fetchAllLaserMarking(params: {
   line: string;
@@ -41,8 +42,8 @@ export const load: PageServerLoad = async ({ url }): Promise<Code2dPageData> => 
       shouldFetch
         ? fetchAllLaserMarking({
             line,
-            date_from: dateFrom + ' 00:00:00',
-            date_to:   dateTo   + ' 23:59:59',
+            date_from: bangkokDayToUtcRange(dateFrom).dateFrom,
+            date_to:   bangkokDayToUtcRange(dateTo).dateTo,
           })
         : Promise.resolve({ items: [] as LaserMarkingRecord[], total: 0 }),
     ]);

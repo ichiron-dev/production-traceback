@@ -2,6 +2,7 @@ import type { PageServerLoad } from './$types';
 import { listAeoi, getAeoiLines } from '$lib/server/grpc';
 import type { AeoiRecord } from '$lib/types/grpc';
 import type { AeoiPageData } from '$lib/types/pages';
+import { bangkokDayToUtcRange } from '$lib/utils/date';
 
 async function fetchAll(params: {
   lot: string;
@@ -58,8 +59,8 @@ export const load: PageServerLoad = async ({ url }): Promise<AeoiPageData> => {
       model,
       line,
       arp_tray: arpTray,
-      date_from: dateFrom ? dateFrom + ' 00:00:00' : '',
-      date_to:   dateTo   ? dateTo   + ' 23:59:59' : '',
+      date_from: dateFrom ? bangkokDayToUtcRange(dateFrom).dateFrom : '',
+      date_to:   dateTo   ? bangkokDayToUtcRange(dateTo).dateTo   : '',
     });
     return {
       items:    res.items,

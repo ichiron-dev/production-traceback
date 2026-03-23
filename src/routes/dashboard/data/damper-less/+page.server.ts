@@ -2,6 +2,7 @@ import type { PageServerLoad } from './$types';
 import { listDamperLess, getDamperLessLines } from '$lib/server/grpc';
 import type { DamperLessRecord } from '$lib/types/grpc';
 import type { DamperLessPageData } from '$lib/types/pages';
+import { bangkokDayToUtcRange } from '$lib/utils/date';
 
 async function fetchAll(params: {
   damper_less: string;
@@ -61,8 +62,8 @@ export const load: PageServerLoad = async ({ url }): Promise<DamperLessPageData>
       lot,
       arp_tray: arpTray,
       line,
-      date_from: dateFrom ? dateFrom + ' 00:00:00' : '',
-      date_to:   dateTo   ? dateTo   + ' 23:59:59' : '',
+      date_from: dateFrom ? bangkokDayToUtcRange(dateFrom).dateFrom : '',
+      date_to:   dateTo   ? bangkokDayToUtcRange(dateTo).dateTo   : '',
     });
     return {
       items:    res.items,

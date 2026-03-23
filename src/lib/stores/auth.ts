@@ -15,19 +15,34 @@ authUser.subscribe((value) => {
   }
 });
 
-export function login(username: string, password: string): LoginResult {
-  if (username && password) {
-    const user: User = {
-      id: 1,
-      username,
-      name: username === 'admin' ? 'ผู้ดูแลระบบ' : username,
-      role: username === 'admin' ? 'Administrator' : 'User',
-      avatar: username.charAt(0).toUpperCase(),
-    };
-    authUser.set(user);
-    return { success: true };
-  }
-  return { success: false, error: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' };
+export async function login(username: string, password: string): Promise<LoginResult> {
+
+  const res = await fetch('http://163.50.57.11/api-auth/api/users/authenticate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      "username": username.toUpperCase(),
+      "password": password,
+      "applicationid": ""
+    })
+  });
+
+  const { empcode, name, message } = await res.json();
+
+  if (!res.ok) return { success: false, error: message };
+
+  const administrator = ['90886'];
+
+  const user: User = {
+    id: +empcode,
+    username: name,
+    name,
+    role: administrator.includes(empcode) ? 'Administrator' : 'User',
+    avatar: name.charAt(0).toUpperCase(),
+  };
+  authUser.set(user);
+  return { success: true };
+
 }
 
 export function logout(): void {

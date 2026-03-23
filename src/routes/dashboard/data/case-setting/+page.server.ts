@@ -2,6 +2,7 @@ import type { PageServerLoad } from './$types';
 import { listCaseSettings, getCaseSettingLines } from '$lib/server/grpc';
 import type { CaseSettingRecord } from '$lib/types/grpc';
 import type { CaseSettingPageData } from '$lib/types/pages';
+import { bangkokDayToUtcRange } from '$lib/utils/date';
 
 async function fetchAll(params: {
   case_setting: string;
@@ -55,8 +56,8 @@ export const load: PageServerLoad = async ({ url }): Promise<CaseSettingPageData
       case_setting: caseSetting,
       empcode,
       line,
-      date_from: dateFrom ? dateFrom + ' 00:00:00' : '',
-      date_to:   dateTo   ? dateTo   + ' 23:59:59' : '',
+      date_from: dateFrom ? bangkokDayToUtcRange(dateFrom).dateFrom : '',
+      date_to:   dateTo   ? bangkokDayToUtcRange(dateTo).dateTo   : '',
     });
     return {
       items:    res.items,
